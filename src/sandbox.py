@@ -19,7 +19,7 @@ df.columns = columns
 df_x = df[df.Role.isin(['IM R1', 'IM R2', 'IM R3'])]
 rezzies = np.sort(df_x.Name.unique())
 
-# dive into 1 rezzy's clinic numbers
+# Use Michelle as testing example, as she multiple different types of leave
 x = 'Zhang, Michelle'
 
 # List of days that will get penalized
@@ -87,8 +87,3 @@ legend = pd.DataFrame([20, '1*', 20, 'NA', 'NA'], columns=['Max Per Year'], \
                       index = ['Vacation', 'Personal', 'Sick/Bereavement', \
                        'Leave W/O Pay', 'Jury Duty']).T
     
-# df_s = legend.T
-# len(df_x.Assignment)
-# df_s[x] = []
-
-# Craft Output List of Penalized Dates
