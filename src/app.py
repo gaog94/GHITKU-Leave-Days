@@ -23,7 +23,7 @@ def generate_url(startdate, enddate, passkey):
     # Use the 625c extension to figure out wtf people are doing
     urlstem = "https://www.amion.com/cgi-bin/ocs?Lo={}&Rpt=625ctabs".format(passkey)
     
-    # If Amion API still works this way, can consider future upgrade:
+    # If Amion urls still work this way as documented, consider future upgrade:
     # Request blocks 2-14 for interns & blocks 1-13 for seniors
     # Example w/academic year 2023 as such:
     # https://www.amion.com/cgi-bin/ocs?Lo=***&Rpt=625c&Blks=1-13&Syr=2023
@@ -192,10 +192,10 @@ def summarize_delinquency(df_out, academicYear):
 app_ui = ui.page_fluid(
     ui.row(
         ui.column(4, 
-                  ui.h4("Check your degree of delinquency:"),
+                  ui.h4("Check your ABIM leave days:"),
                   
                   # Amion password
-                  ui.input_password("password", "Amion Password:", ""),  
+                  ui.input_password("password", "Amion Access Code:", ""),  
               
                   # Date range
                   ui.input_select(
@@ -215,14 +215,14 @@ app_ui = ui.page_fluid(
               
                   ui.input_select(  
                       "rezzies",  
-                      'Is ___ a "delinquent?"',  
+                      'How many leave days will ___ have used?',  
                       [],
                       multiple=False,
                       width="100%",
                       size=12,
                   ),  
               
-                  ui.input_action_button("submit_resident", "Start Inquisition!"),  
+                  ui.input_action_button("submit_resident", "Check Leave"),  
                   
                   ui.HTML("<br><br><br>"),  
                   
