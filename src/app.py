@@ -10,7 +10,7 @@ from shiny import App, reactive, render, ui
 
 from urllib.request import urlretrieve
 
-import datetime
+from datetime import datetime
 from collections import Counter
 
 import pandas as pd
@@ -40,20 +40,20 @@ def download_df(academicYear, passkey):
     # need to adjust these thresholds for intern vs senior calendars
     # will also try to get rid of hard-coded dates in a later patch
     if academicYear == 'AY22':
-        startdate = datetime.datetime(2022, 6, 24) # '2022-06-24'
-        enddate = datetime.datetime(2023, 6, 27) # '2023-06-27'
+        startdate = datetime(2022, 6, 24) # '2022-06-24'
+        enddate = datetime(2023, 6, 27) # '2023-06-27'
     if academicYear == 'AY23':
-        startdate = datetime.datetime(2023, 6, 28) # '2023-06-28'
-        enddate = datetime.datetime(2024, 6, 30) # '2024-06-30'
+        startdate = datetime(2023, 6, 28) # '2023-06-28'
+        enddate = datetime(2024, 6, 30) # '2024-06-30'
     elif academicYear == 'AY24':
-        startdate = datetime.datetime(2024, 7, 1) # '2024-07-01'
-        enddate = datetime.datetime(2025, 6, 29) # '2025-06-29'
+        startdate = datetime(2024, 7, 1) # '2024-07-01'
+        enddate = datetime(2025, 6, 29) # '2025-06-29'
     elif academicYear == 'AY25':
-        startdate = datetime.datetime(2025, 6, 30) # '2025-06-30'
-        enddate = datetime.datetime(2026, 6, 29) # '2026-06-29'
+        startdate = datetime(2025, 6, 30) # '2025-06-30'
+        enddate = datetime(2026, 6, 29) # '2026-06-29'
     else: # if invalid academic year given, then return ancient year for an error
-        startdate = datetime.datetime(1, 1, 1)
-        enddate = datetime.datetime(1, 1, 2)
+        startdate = datetime(1, 1, 1)
+        enddate = datetime(1, 1, 2)
     
     # pull data from amion using given academic year and passkey
     url = generate_url(startdate, enddate, passkey)
@@ -127,14 +127,14 @@ def check_delinquency(df, rezzy):
     # Mask Sick & Bereavement under same label to attempt to protect privacy
     df_x.Assignment = ['Sick/Bereavement' if x in  ['Bereavement', 'Sick'] else x for x in df_x.Assignment]
 
-    # Drop vacation days used used on weekend days:
+    # Drop vacation days used  on weekend days:
     
     # Convert index dates to [DOW Month DD, YYYY] format & add DOW column
     df_out = df_x[['Assignment', 'Date', 'Assgn']]
     dates, dsow = [], []
     for d in df_out.Date:
         if type(d) is str:
-            date = datetime.datetime.strptime(d, '%m-%d-%y') # -> datetime obj
+            date = datetime.strptime(d, '%m-%d-%y') # -> datetime obj
             textdate = date.strftime("%A %b %d, %Y") # -> new string
             dates.append(textdate)
             dsow.append(date.strftime("%A"))
@@ -189,10 +189,77 @@ def summarize_delinquency(df_out, academicYear):
             
     return df_s
 
+def check_continuity(df, rezzy):
+    df_x = df[df.Name == rezzy]                     # get only that rezzy
+    df_x = df_x[df_x['Type'] == 'c']                # get only clinic shifts
+    df_x = df_x.dropna(subset=['Assignment'])       # drop null entries
+    
+    # Collect continuity clinic shift entries, 
+    # make sure you don't pick up "Primary Care SOM" entries: WWAMI rotations
+    df_c = df_x[(df_x.Assignment.str[:3] =='GIM') | (df_x.Assignment.str[:14] == 'Primary Care V')]
+
+    # remove Shalit-clinic half-days (H ID outpt rotation has these)
+    df_c = df_c[~df_c.Assignment.str.contains('Shalit')]
+
+    # Pull panel management half-day assignments
+    df_p = df_x[df_x.Assignment.str.contains('Panel')]
+    
+    return df_c[['Assignment', 'Date']], df_p[['Assignment', 'Date']]
+
+def paint_continuity(df_c, df_p):
+    df_out = pd.concat([df_c, df_p]).sort_index()
+    
+    # Convert index dates to [DOW Month DD, YYYY] format & add DOW column
+    df_out = df_out[['Assignment', 'Date']]
+    dates, dsow = [], []
+    for d in df_out.Date:
+        if type(d) is str:
+            date = datetime.strptime(d, '%m-%d-%y') # -> datetime obj
+            textdate = date.strftime("%A %b %d, %Y") # -> new string
+            dates.append(textdate)
+            dsow.append(date.strftime("%A"))
+        else:
+            dates.append('')
+            dsow.append('')
+    df_out.index = dates
+    df_out['DOW'] = dsow
+
+    # Sort Dates by chronological order
+    df_out['Year'] = df_out.Date.str.split('-').str[2].astype(int)
+    df_out['Month'] = df_out.Date.str.split('-').str[0].astype(int)
+    df_out['Day'] = df_out.Date.str.split('-').str[1].astype(int)
+    df_out = df_out.sort_values(['Year', 'Month', 'Day'])
+    
+    # drop 'Year', 'Month', 'Day', and 'Date' columns for sleek presentation
+    df_out = df_out[['Assignment']]
+
+    # reset index to be numerical for styles
+    df_out = df_out.reset_index()
+    df_out.columns = ['Date', 'Assignment']
+
+    # Create coloring guide for output dataframe
+    colors = ['#1b9e77', '#7570b3']
+    styles = [{"class": "text-center", "color": "white"}]
+    for df, color in zip([df_c, df_p], colors):
+        pertinentAssgns = df.Assignment.unique()
+        rowIndices = list(df_out[df_out['Assignment'].isin(pertinentAssgns)].index)
+        styles.append({
+            "rows": rowIndices,
+            "cols": [1],
+            "style": {"background-color": color}
+        })
+    
+    return df_out, styles
+
+
+def summarize_continuity(df_c, df_p, academicYear):
+    return pd.DataFrame([len(df_c), len(df_p)], columns=[academicYear], \
+                        index=['Continuity Clinic Half-Days', 'Panel Half-Days']).T
+
 app_ui = ui.page_fluid(
     ui.row(
         ui.column(4, 
-                  ui.h4("Check your ABIM leave days:"),
+                  ui.h4("GHITKU Academic Year Counter Tool"),
                   
                   # Amion password
                   ui.input_password("password", "Amion Access Code:", ""),  
@@ -212,6 +279,12 @@ app_ui = ui.page_fluid(
                   ui.input_action_button("submit_AY", "Submit Year"),  
               
                   ui.HTML("<br><br><br>"),  
+                  
+                  ui.input_radio_buttons(  
+                      "metric",  
+                      "What do you want to track?",  
+                      {"Off": "Off/Leave Days", "CC": "Continuity Clinic Days"},  
+                  ),
               
                   ui.input_select(  
                       "rezzies",  
@@ -222,7 +295,7 @@ app_ui = ui.page_fluid(
                       size=12,
                   ),  
               
-                  ui.input_action_button("submit_resident", "Check Leave"),  
+                  ui.input_action_button("submit_resident", "Check ___"),  
                   
                   ui.HTML("<br><br><br>"),  
                   
@@ -232,7 +305,7 @@ app_ui = ui.page_fluid(
         ),
     
         ui.column(8,
-                  ui.h2("Summary of Days of Leave"),
+                  ui.h2(ui.output_text("header_text")),
                   ui.output_data_frame("DQ_aggregate"), # change this to summary
                   ui.output_text_verbatim("summary", placeholder=False),
                   ui.output_text("asteriskOne"),
@@ -267,88 +340,204 @@ def server(input, output, session):
         else:
             masterDict = generate_rezzy_dictionary(df)
             ui.update_select("rezzies", choices=masterDict)
-        
+  
+    @reactive.effect()
+    @reactive.event(input.metric)
+    def input_select_text():
+      if input.metric() == "CC":
+          ui.update_select("rezzies", label="How many clinic days will ___ have had?")
+      elif input.metric() == "Off":       
+          ui.update_select("rezzies", label="How many leave days will ___ have used?")
+    
+    @reactive.effect()
+    @reactive.event(input.metric)
+    def button_text():
+      if input.metric() == "CC":
+          ui.update_action_button("submit_resident", label="Check Clinic")
+      elif input.metric() == "Off":       
+          ui.update_action_button("submit_resident", label="Check Leave")
+    
+    @output
+    @render.text
+    @reactive.event(input.submit_resident)
+    def header_text():
+        if input.metric() == "CC":
+            return "Summary of Continuity Clinic Days"
+        elif input.metric() == "Off":       
+            return "Summary of Days of Leave"
+    
+    
+    
     @reactive.Calc
     @reactive.event(input.submit_resident)
     def data():
-        try:
-            df_out, styles = check_delinquency(amionData.get(), input.rezzies())
-        except AttributeError:
-            df_out = pd.DataFrame({" ": [], "  ": []})
-            styles = {}
+        if input.metric() == "CC":
+            
+            # run continuity clinic functions
+            try:
+                df_c, df_p = check_continuity(amionData.get(), input.rezzies())
+            except AttributeError:
+                df_c = pd.DataFrame({" ": [], "  ": []})
+                df_p = pd.DataFrame({" ": [], "  ": []})
         
-        return df_out, styles
+            return df_c, df_p
+
+        elif input.metric() == "Off":
+
+            # run off/leave day functions
+            try:
+                df_out, styles = check_delinquency(amionData.get(), input.rezzies())
+            except AttributeError:
+                df_out = pd.DataFrame({" ": [], "  ": []})
+                styles = {}
+            
+            return df_out, styles
 
     @render.data_frame
+    @reactive.event(input.submit_resident)
     def DQ_individual():
-        df_out, styles = data()
-        if len(df_out) == 0:
-            ui.update_text('alert', value='Error: Not all inputs provided!')
-        else:
-            return render.DataGrid(
-                df_out,
-                filters=False,
-                summary=False,
-                width="100%",
-                styles=styles,
-            )
+        if input.metric() == "CC":
+            
+            # run continuity clinic functions
+            df_c, df_p = data()
+            if len(df_c) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                df_out, styles = paint_continuity(df_c, df_p)
+                return render.DataGrid(df_out, filters=False, summary=False, width="100%", styles=styles)
+            
+        elif input.metric() == "Off":
+            
+            # run off/leave day functions
+            df_out, styles = data()
+            if len(df_out) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return render.DataGrid(
+                    df_out,
+                    filters=False,
+                    summary=False,
+                    width="100%",
+                    styles=styles,
+                )
+
 
     # @output
     @render.data_frame
+    @reactive.event(input.submit_resident)
     def DQ_aggregate():
-        df = data()[0]
-        if len(df) == 0:
-            ui.update_text('alert', value='Error: Not all inputs provided!')
-        else:
-            columns = ['Vacation', 'Personal', 'Sick/Bereavement', 'Leave W/O Pay', 'Jury Duty']
-            legend = pd.DataFrame([20, '1*', '17/3-5**', 'NA', 'NA'], columns=['Max Per Year'], \
-                          index = columns).T
-                
-            df_s = summarize_delinquency(data()[0], input.academicYear())
-            df_s = pd.concat([legend, df_s]).reset_index()
-            df_s.columns = [' '] + columns
+        if input.metric() == "CC":
+        
+            # run continuity clinic functions
+            df_c, df_p = data()
+            if len(df_c) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                df_s = summarize_continuity(df_c, df_p, input.academicYear())
+                colors = ['#1b9e77', '#7570b3']
+                return render.DataGrid(
+                    df_s,
+                    styles=[
+                        {
+                            'rows': [0],
+                            'cols': [i],
+                            'style': {'background-color': color},
+                        } for i, color in enumerate(colors)]
+                )
             
-            colors = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e']
-    
-            return render.DataGrid(
-                df_s,
-                styles=[
-                    {
-                        'rows': [1],
-                        'cols': [i+1],
-                        'style': {'background-color': color},
-                    } for i, color in enumerate(colors)]
+        elif input.metric() == "Off":
+            
+            # run off/leave day functions        
+            df = data()[0]
+            if len(df) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                columns = ['Vacation', 'Personal', 'Sick/Bereavement', 'Leave W/O Pay', 'Jury Duty']
+                legend = pd.DataFrame([20, '1*', '17/3-5**', 'NA', 'NA'], columns=['Max Per Year'], \
+                              index = columns).T
                     
-            )
+                df_s = summarize_delinquency(data()[0], input.academicYear())
+                df_s = pd.concat([legend, df_s]).reset_index()
+                df_s.columns = [' '] + columns
+                
+                colors = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e']
+        
+                return render.DataGrid(
+                    df_s,
+                    styles=[
+                        {
+                            'rows': [1],
+                            'cols': [i+1],
+                            'style': {'background-color': color},
+                        } for i, color in enumerate(colors)]
+                        
+                )
+
 
     @render.text
     @reactive.event(input.submit_resident)
     def summary():
-        df = data()[0]
-        if len(df) == 0:
-            ui.update_text('alert', value='Error: Not all inputs provided!')
-        else:
-            df = summarize_delinquency(df, input.academicYear()).T
-            s = sum(df[input.academicYear()])
-            return "%s has used %d days of leave out of 35 advised (per annum)" \
-                % (input.rezzies(), s)
+        
+        if input.metric() == "CC":
+            # run continuity clinic functions
+            df = data()[0]
+            if len(df) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return "Panel management should comprise 15-20% of continuity sessions."
+        
+        elif input.metric() == "Off":
+        
+            # run off/leave day functions
+            df = data()[0]            
+            if len(df) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                df = summarize_delinquency(df, input.academicYear()).T
+                s = sum(df[input.academicYear()])
+                return "%s has used %d days of leave out of 35 max advised (per annum)" \
+                    % (input.rezzies(), s)
+
     
     @render.text
     @reactive.event(input.submit_resident)
     def asteriskOne():
-        if len(data()[0]) == 0:
-            ui.update_text('alert', value='Error: Not all inputs provided!')
-        else:
-            return "*1 personal day is allowed per calendar year (NOT academic year)"
+        if input.metric() == "CC":
+            
+            # run continuity clinic functions
+            if len(data()[0]) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return "50 continuity clinic half-days required per year"
+        
+        elif input.metric() == "Off":
+            
+            # run off/leave day functions
+            if len(data()[0]) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return "*1 personal day is allowed per calendar year (NOT academic year)"
+
 
     @render.text
     @reactive.event(input.submit_resident)
     def asteriskTwo():
-        if len(data()[0]) == 0:
-            ui.update_text('alert', value='Error: Not all inputs provided!')
-        else:
-            return "**RFPU grants 17 days of sick time per academic year. RFPU \
-                also grants 5 days of bereavement leave a year (or 3 if no \
-                significant travel is required)"
+        if input.metric() == "CC":
+            
+            # run continuity clinic functions
+            if len(data()[0]) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return "170 continuity clinic half-days required by end of residency"
+            
+        elif input.metric() == "Off":
+            
+            # run off/leave day functions
+            if len(data()[0]) == 0:
+                ui.update_text('alert', value='Error: Not all inputs provided!')
+            else:
+                return "**RFPU grants 17 days of sick time per academic year. RFPU \
+                    also grants 5 days of bereavement leave a year (or 3 if no \
+                    significant travel is required)"
     
 app = App(app_ui, server)
