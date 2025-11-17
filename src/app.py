@@ -198,8 +198,15 @@ def check_continuity(df, rezzy):
     # make sure you don't pick up "Primary Care SOM" entries: WWAMI rotations
     df_c = df_x[(df_x.Assignment.str[:3] =='GIM') | (df_x.Assignment.str[:14] == 'Primary Care V')]
 
-    # remove Shalit-clinic half-days (H ID outpt rotation has these)
+    # remove Shalit-clinic half-days (H ID outpt rotation has these) 
+    # also remove & Steehler half-days
     df_c = df_c[~df_c.Assignment.str.contains('Shalit')]
+    df_c = df_c[~df_c.Assignment.str.contains('Steehler')]
+    
+    # remove VA women's clinics (WHC)
+    # also gonna assume "Procedure V clinic"  doesn't count (e.g. what Vicki had 6/24/2024 PM)
+    df_c = df_c[~df_c.Assignment.str.contains('WHC')]
+    df_c = df_c[~df_c.Assignment.str.contains('Procedure')]
 
     # Pull panel management half-day assignments
     df_p = df_x[df_x.Assignment.str.contains('Panel')]
@@ -508,7 +515,7 @@ def server(input, output, session):
             if len(data()[0]) == 0:
                 ui.update_text('alert', value='Error: Not all inputs provided!')
             else:
-                return "50 continuity clinic half-days required per year"
+                return "50 (for categorial track) & 60 (for primary care track) continuity clinic half-days required annually"
         
         elif input.metric() == "Off":
             
@@ -528,7 +535,7 @@ def server(input, output, session):
             if len(data()[0]) == 0:
                 ui.update_text('alert', value='Error: Not all inputs provided!')
             else:
-                return "170 continuity clinic half-days required by end of residency"
+                return "170 (for categorical track) & 210 (for primary care track) continuity clinic half-days required by end of residency"
             
         elif input.metric() == "Off":
             
