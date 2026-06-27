@@ -51,6 +51,9 @@ def download_df(academicYear, passkey):
     elif academicYear == 'AY25':
         startdate = datetime(2025, 6, 30) # '2025-06-30'
         enddate = datetime(2026, 6, 29) # '2026-06-29'
+    elif academicYear == 'AY26':
+        startdate = datetime(2026, 6, 30) # '2026-06-30'
+        enddate = datetime(2027, 6, 29) # '2027-06-29'
     else: # if invalid academic year given, then return ancient year for an error
         startdate = datetime(1, 1, 1)
         enddate = datetime(1, 1, 2)
@@ -275,11 +278,11 @@ app_ui = ui.page_fluid(
                   ui.input_select(
                       "academicYear",
                       "Choose an academic year:",
-                      {"AY22": "2022 - 2023", \
-                       "AY23": "2023 - 2024" , \
+                      {"AY23": "2023 - 2024" , \
                        "AY24": "2024 - 2025", \
-                       "AY25": "2025 - 2026"},
-                      selected = "AY24"
+                       "AY25": "2025 - 2026", \
+                       "AY26": "2026 - 2027"},
+                      selected = "AY26"
                   ),
 
                   # Submit button to populate list of residents
