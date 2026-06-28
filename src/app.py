@@ -52,7 +52,7 @@ def download_df(academicYear, passkey):
         startdate = datetime(2025, 6, 30) # '2025-06-30'
         enddate = datetime(2026, 6, 29) # '2026-06-29'
     elif academicYear == 'AY26':
-        startdate = datetime(2026, 6, 30) # '2026-06-30'
+        startdate = datetime(2026, 6, 29) # '2026-06-30'
         enddate = datetime(2027, 6, 29) # '2027-06-29'
     else: # if invalid academic year given, then return ancient year for an error
         startdate = datetime(1, 1, 1)
@@ -64,8 +64,8 @@ def download_df(academicYear, passkey):
 
     # attempt to parse results and return accordingly
     try:
-        df = pd.read_table(path, skiprows=7, header=None, \
-                       usecols=[0,3,6,7,8,9,15,16])
+        df = pd.read_table(path, encoding_errors='replace', skiprows=7, \
+                           header=None, usecols=[0,3,6,7,8,9,15,16])
     
     except pd.errors.EmptyDataError:
         return pd.DataFrame([])
